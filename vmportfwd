@@ -1,0 +1,63 @@
+#!/bin/bash
+
+#Set a port forward rule in a virtualbox vm
+#TODO:This script needs testing and some changes...
+
+([[ ! $1 ]] || [[ ! $2 ]] || [[ ! $3 ]])  && printf "Argumenst not specified\n\nvmportfwd <vmname> <iphost> <ipport>" || {
+
+  vboxmanage list vms | grep -q "$1"
+  [[ ! $? -eq 0 ]] && {
+    # invalid name
+    printf "Vm name does not exist\nVms in the system:\n"
+    vboxmanage list vms
+  } || {
+    # Name is valid: let's go
+
+    thevmprivateip=$(vboxmanage guestproperty enumerate "$1" | grep "Net/./V4/IP" | sed "s|^.*value: ||" | sed "s|, timestamp.*$||" | grep "192.168")
+    [[ -z $thevmprivateip ]] && {
+      printf "Unable to get IP address from $1.\n"
+
+    } || {
+      n=100
+      while [ : ]
+      do
+        vboxmanage showvminfo "$1" | grep -q "^NIC 1 Rule(.*name = Rule${n}"
+        [[ $? -eq 0 ]] && {
+          # invalid name rule alreay exists
+          # decrement
+          ((n=n-1))
+        } || {
+          # set rule
+          while [ : ]
+          do
+            vboxmanage modifyvm "$1" --natpf1 "Rule${n},tcp,${2},${3},${thevmprivateip},${3}" 2> log${n}
+            [[ $? -eq 0 ]] && {
+              printf "Rule set."
+              break
+            }
+            # error
+            cat log${n} | grep -q "A NAT rule for this host port and this host IP already exists"
+            [[ ! $? -eq 0 ]] && {
+              # some error
+              cat log${n}
+              break
+            }
+            # rule exists for same port/host delete actual rule
+            printf "Rule exists for the same host/port will be deleted...\n"
+            # get the rule name for tha sam host/port
+            therulename=$(vboxmanage showvminfo Code | grep "^NIC 1 Rule(.*host ip = ${2}, host port = ${3}" | sed "s|^.*name = ||" | sed "s|, protocol.*$||")
+            [[ -z $therulename ]] && break
+            # delete it
+            vboxmanage modifyvm "$1" --natpf1 delete "${therulename}"
+            [[ ! $? -eq 0 ]] && {
+              printf "Error deleting actual rule."
+              break
+            }
+          done
+          break
+        }
+      done
+    }
+
+  }
+}

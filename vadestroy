@@ -1,0 +1,38 @@
+#!/bin/bash
+
+## Script to destroy vagrant vm
+
+: ${pathactual=$(pwd)}
+: ${pathmachines=/d/users/jcarvalho/work/code/vagrant-vms/machines/} 
+
+cd ${pathmachines}$1 2>/dev/null
+[[ ! $? -eq 0 ]] && printf "Error accessing path machine [%s]\n" "${pathmachines}$1" && exit 1
+
+pwd
+
+: ${thepath=$(pwd)}
+: ${thevm=${thepath##*/}}
+
+vagrant status | grep "poweroff" 1>/dev/null
+if [[ ! $? -eq 0 ]]
+then
+	vagrant halt
+	vagrant status | grep "poweroff" 1>/dev/null
+	[[ ! $? -eq 0 ]] && printf "Error destroying machine [%s]. Unable to halt.\n" "$thevm" && exit 1
+fi
+
+vagrant destroy #-f
+[[ ! $? -eq 0 ]] && printf "Error or option to no destroy machine [%s]\n" "$thevm" && exit 1
+
+[[ -e ${pathmachines}${thevm}/.vagrant/machines/default/virtualbox/id ]]  && printf "Error destroying machine [%s]\n" "$thevm" && exit 1
+
+cd ${pathactual}
+
+rm -rf ${pathmachines}${thevm}
+[[ -d ${pathmachines}${thevm} ]] && printf "Error removing vm path [%s]\n" "${thevm}" && exit 1
+
+rm -rf /c/users/jcarvalho/documents/virtualboxvms/${thevm}
+[[ -d /c/users/jcarvalho/documents/virtualboxvms/${thevm} ]] && printf "Error removing vbox path [%s]\n" "/c/users/jcarvalho/documents/virtualboxvms/${thevm}" && exit 1
+
+printf "Machine [%s] destroyed.\n" "$thevm"
+exit 0

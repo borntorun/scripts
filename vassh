@@ -1,0 +1,24 @@
+#!/bin/bash
+
+## Script to vagrant ssh a vm
+
+: ${pathactual=$(pwd)}
+: ${pathmachines=/d/users/jcarvalho/work/code/vagrant-vms/machines/}
+
+if [[ $1 ]]
+then
+	cd ${pathmachines}$1 2>/dev/null
+	[[ ! $? -eq 0 ]] && printf "Error accessing path machine [%s]\n" "${pathmachines}$1" && exit 1
+fi
+
+pwd
+
+[[ ! -e Vagrantfile ]] && printf "No Vagrantfile in [%s]\n" "${pathmachines}$1" && exit 1
+
+vagrant ssh
+echo $?
+
+[[ ! $? -eq 0 ]] && printf "Error ssh...ing the machine..." && exit 1
+
+
+exit 0

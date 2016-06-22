@@ -1,0 +1,32 @@
+#!/bin/bash
+# Stops a VirtualBox Vm
+
+vboxmng=$(which vboxmanage)
+[[ ! $? -eq 0 ]] && {
+	printf "\nCan't find vboxmanage.\nVirtualBox needs to be installed.\n\n"
+	exit 1
+}
+network="192.168.40" #internal network
+
+[[ ! $1 ]] && printf "Vm not specified" || {
+
+	"${vboxmng}" list vms | grep -q "$1"
+	[[ ! $? -eq 0 ]] && {
+		# invalid name
+		printf "Vm name does not exist\nVms in the system:\n"
+		"${vboxmng}" list vms
+	} || {
+		# name valid
+
+		thevmprivateip=$("${vboxmng}" guestproperty enumerate "$1" | grep "Net/./V4/IP" | sed "s|^.*value: ||" | sed "s|, timestamp.*$||" | grep $network)
+
+		"${vboxmng}" list runningvms | grep -q "$1"
+		[[ ! $? -eq 0 ]] && printf "Vm is already stopped.\n" || {
+			# vm is running let's stop it
+			"${vboxmng}" controlvm "$1" poweroff
+			"${vboxmng}" list runningvms | grep -q "$1"
+			[[ ! $? -eq 0 ]] && printf "Vm stopped.\n" || printf "Could not stop Vm.\n"
+		}
+
+	}
+}

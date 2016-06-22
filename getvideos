@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+
+# Download videos with curl or youtube-dl
+#
+# Usage:
+#
+# Parameters:
+#		Method for download: curl (default) oy youtube
+# 	A file can be given with each video path in one line
+# 	A list of videos in the command line
+# If both are given the option for file (-f) must be first
+#
+# Syntax:
+# getvideos [-x <curl|youtube>] [-f<line_delimeted_file_with_http_path_to_videos>] [-l <file1...fileN>] [-h]"
+#
+
+commandexec=""
+isCurl=
+
+printusage ()
+{
+	printf "\nDownload videos with curl or youtube-dl"
+	printf "\n"
+	printf "\nUsage:"
+	printf "\n"
+	printf "\n Syntax:"
+	printf "\n getvideos [-x <curl|youtube>] [-f<line_delimeted_file_with_http_path_to_videos>] [-l <file1...fileN>] [-h]"
+	printf "\n"
+	printf "\nParameters:"
+	printf "\n	-x Method for download: curl (default) | youtube"
+	printf "\n		with youtube-dl the name will be automatically set"
+	printf "\n		with curl the name will be the url without the domain part using '-' instead of '/' prefixed with the index order of the list to be downloaded"
+	printf "\n		the method choosen is applied on all videos cmd line and the ones on the file"
+	printf "\n			example: getvideos -l http://domain.name.com/part/videos/title.mp4"
+	printf "\n				will result in '01-part-videos-title.mp4'"
+	printf "\n			example: getvideos -l http://domain.name.com/part/videos/title.mp4 http://domain.name.com/part/videos/another.mp4 "
+	printf "\n				will result in '01-part-videos-title.mp4' and '02-part-videos-another.mp4'"
+	printf "\n\n 	-f A file can be given with each video path in one line"
+	printf "\n\n			support for youtube-dl options: just include them in each line of the file"
+	printf "\n\n 	-l A space delimeted list of videos in the command line  "
+	printf "\n\n If both (-f, -l) are given the option for file (-f) must be first."
+
+	#printf "\n\nNote: It is recommended to enclose urls of videos in quotes (\")"
+	printf "\n"
+
+
+	exit 1
+}
+
+[[ ${#} -eq 0 ]] && {
+	printusage
+	exit 1
+}
+
+getresourcepath()
+{
+	URL="$1"
+	tmp=$(echo "$1" | grep https://)
+	[[ -z $tmp ]] && URL_NOPRO=${URL:7} || URL_NOPRO=${URL:8}
+	URL_REL=${URL_NOPRO#*/}
+	echo "/${URL_REL%%\?*}"
+}
+
+execdownload()
+{
+	for t in "${@}"
+	do
+		echo
+		echo "$t" | sed "s|^curl -o ||g"
+		#run the command
+		($t)
+	done
+}
+downloadlist()
+{
+	unset cmdline
+	numargs=$#
+
+	for ((i=1 ; i <= numargs ; i++))
+	do
+		[[ -z $commandexec || $commandexec = "curl" ]] && {
+			commandexec="curl"
+			parname=" -o $1 "
+		} || parname=" -o %(playlist)s/0%(playlist_index)s-%(title)s.%(ext)s "
+
+
+		theurl=$(echo $2 | awk '{ split($1, a, "--"); print a[1] }')
+		therest=$(echo $2 | sed "s|$theurl||")
+
+		cmdline[${#cmdline[@]}]="${commandexec}${parname}$theurl $therest"
+
+	  shift
+		shift
+		[[ -z $1 ]] && break;
+
+	done
+
+	execdownload "${cmdline[@]}"
+}
+
+downloadFromFile()
+{
+
+	[[ ! -z filelist ]] && {
+		while read -r url
+		do
+
+			part=$(echo $(getresourcepath "$url") | sed "s|\/|-|g")
+			num=$(( $num + 1 ))
+			part="0${num}-${part:1}"
+
+			list[${#list[@]}]="$part"
+			list[${#list[@]}]="$url"
+
+			#printf "$part\n$url\n\n"
+		done <"$filelist"
+
+		downloadlist "${list[@]}"
+	}
+}
+downloadFromCommandLine()
+{
+	num=0
+	for url in "${@}"
+	do
+		#printf "...$url\n"
+		[[ $url = "-f" || $url = "-x" || $url = "--single" ]] && break;
+
+		part=$(echo $(getresourcepath "$url") | sed "s|\/|-|g")
+		num=$(( $num + 1 ))
+		part="0${num}-${part:1}"
+		listcmd[${#listcmd[@]}]="$part"
+		listcmd[${#listcmd[@]}]="$url"
+	done
+	#echo "${listcmd[@]}"
+	downloadlist "${listcmd[@]}"
+}
+
+while getopts :x:f:l:h opt
+do
+	#printf "$opt\n"
+	case $opt in
+	\?)	printf "\nInvalid options: -$OPTARG\n"
+		printusage "getvideos"
+		exit 1
+		;;
+	x) [[ $OPTARG != "youtube" && $OPTARG != "curl" ]] && {
+			printf "\nInvalid options: -$OPTARG\n"
+			printusage "getvideos"
+			exit 1
+		}
+		[[ $OPTARG = "youtube" ]] && {
+			which youtube-dl >/devnull
+			[[ $? -eq 0 ]] && {
+					commandexec="youtube-dl --no-check-certificate "
+			} || {
+				printf "Util 'youtube-dl' not found!"
+				exit 1
+			}
+		} || commandexec="$OPTARG"
+		;;
+	f)	[[ -n filelist ]] && {
+
+		filelist="$OPTARG"
+
+		}
+		;;
+	:)	printf "\nOption -$OPTARG requires an argument.\n"
+		printusage "getvideos"
+		;;
+	h)	printf "Help:\n"
+	 	printusage "getvideos"
+	 	;;
+	l)
+		hasinlinelist=1
+		shift
+		[[ ${filelist}x != "x" ]] && {
+			shift
+			shift
+		}
+		#echo ${@}
+		[[ -n $commandexec ]] && {
+			shift
+			shift
+		}
+		#echo ${@}
+		commandlinelist=${@}
+		#downloadFromCommandLine ${@}
+
+	  ;;
+	esac
+done
+
+[[ -z $commandexec || $commandexec = "curl" ]] && isCurl=true
+
+[[ $hasinlinelist ]] && downloadFromCommandLine $commandlinelist
+[[ $filelist ]] && downloadFromFile

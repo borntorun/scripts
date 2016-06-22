@@ -1,0 +1,102 @@
+#!/bin/bash
+# Starts a VirtualBox Vm and launchs putty to ssh in it
+#
+# Vm must be configured with an Host-only adapter
+# The script will determine the IP address for the network adapter
+# For now only one Host-only adapter is supported
+#
+# Usage:
+# 	vmstart <vboxName> [user]
+#
+#			vboxname - the virtualbox name to start
+#			user to login in the putty session
+#
+# Note:this script was only tested and used in windows (with mingw) to boot VirtualBox machines#
+#
+#TODO: pass in option for type 'startvm'
+#TODO: pass in option for start putyy
+#TODO: allow multiple network adapters and possibility to choose the one to connect
+
+#Change default values:
+defaultuser="joao"
+network="192.168.40" #internal network
+
+
+
+
+vboxmng=$(which vboxmanage)
+[[ ! $? -eq 0 ]] && {
+	printf "\nCan't find vboxmanage.\nVirtualBox needs to be installed.\n\n"
+	exit 1
+}
+
+getprivateip() {
+	echo $("${vboxmng}" guestproperty enumerate "$1" | grep "Net/./V4/IP" | sed "s|^.*value: ||" | sed "s|, timestamp.*$||" | grep $2)
+}
+
+[[ ! $1 ]] && printf "Vm not specified" || {
+
+	"${vboxmng}" list vms | grep -q "$1"
+	[[ ! $? -eq 0 ]] && {
+		# invalid name
+		printf "Vm name does not exist\nVms in the system:\n"
+		"${vboxmng}" list vms
+	} || {
+		# Name is valid: let's go
+
+		thevmprivateip=$(getprivateip $1 $network)
+
+    echo $thevmprivateip
+
+		"${vboxmng}" list runningvms | grep -q "$1"
+		[[ $? -eq 0 ]] && printf "Vm is already started.\n" || {
+			# vm is not running
+			"${vboxmng}" startvm "$1" #--type headless
+			[[ ! $? -eq 0 ]] && printf "vmstart:could not start vm.\n" || {
+				printf "Waiting for vm"
+				percent=0
+				while [ : ]
+				do
+				  while [ : ]
+          do
+            [[ ! -z $thevmprivateip ]] && {
+              break
+            }
+            thevmprivateip=$(getprivateip $1 $network)
+          done
+
+					ping -n 1 -w 5 "${thevmprivateip}" >/dev/null
+					[[ $? -eq 0 ]] || [[ $percent -gt 160 ]] && {
+						printf "\r                  \r";
+						break
+					}
+					printf ".";sleep 1;printf ".";sleep 1;printf ".";sleep 1;printf ".";sleep 1
+          ((percent=percent+10))
+				  printf "\b\b\b\b    \b\b\b\b"
+				done
+
+			}
+		}
+		#does no work in mingw vboxmanage guestproperty get "$1" "/VirtualBox/GuestInfo/Net/0/V4/IP" | sed "s|value|IP|"
+		ping -n 1 -w 5 "${thevmprivateip}" >/dev/null
+		[[ ! $? -eq 0 ]] && {
+			printf "Cannot verify successful state of Vm [%s]\nMaybe the vm is still booting...\nAnd you probably need to repeat the command...\n" "$1"; exit 1
+		}
+		printf "Vm [%s] is running at IP: %s\n" "$1" "${thevmprivateip}"
+
+		#putty -load "$1" &
+
+		[[ ! $2 ]] && {
+		  printf "Initiating ssh session to [%s/%s] as ${defaultuser}\n" "$1" "${thevmprivateip}"
+		  putty -ssh "${defaultuser}@${thevmprivateip}" &
+		}  || {
+		  [[ $2 = "-" ]] && {
+        printf "Initiating ssh session to [%s/%s]\n" "$1" "${thevmprivateip}"
+        putty -ssh  "${thevmprivateip}" &
+		  } || {
+        printf "Initiating ssh session to [%s/%s] as %s\n" "$1" "${thevmprivateip}" "$2"
+        putty -ssh "$2@${thevmprivateip}" &
+      }
+		}
+	}
+}

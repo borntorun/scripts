@@ -1,0 +1,34 @@
+#!/bin/bash
+# Saves the state of a VirtualBox Vm
+
+vboxmng=$(which vboxmanage)
+[[ ! $? -eq 0 ]] && {
+	printf "\nCan't find vboxmanage.\nVirtualBox needs to be installed.\n\n"
+	exit 1
+}
+vboxmng=$(which vboxmanage)
+
+network="192.168.40" #internal network
+
+[[ ! $1 ]] && printf "Vm not specified" || {
+
+	"${vboxmng}" list vms | grep -q "$1"
+	[[ ! $? -eq 0 ]] && {
+		# invalid name
+		printf "Vm name does not exist\nVms in the system:\n"
+		"${vboxmng}" list vms
+	} || {
+		# name valid
+
+		thevmprivateip=$("${vboxmng}" guestproperty enumerate "$1" | grep "Net/./V4/IP" | sed "s|^.*value: ||" | sed "s|, timestamp.*$||" | grep $network)
+
+		"${vboxmng}" list runningvms | grep -q "$1"
+		[[ ! $? -eq 0 ]] && printf "Vm is not running.\n" || {
+            # vm is running let's stop it
+			"${vboxmng}" controlvm "$1" savestate
+			"${vboxmng}" list runningvms | grep -q "$1"
+			[[ ! $? -eq 0 ]] && printf "Vm saved.\n" || printf "Could not save state Vm.\n"
+		}
+
+	}
+}
