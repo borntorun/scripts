@@ -152,7 +152,7 @@ do
 		[[ $OPTARG = "youtube" ]] && {
 			which youtube-dl >/devnull
 			[[ $? -eq 0 ]] && {
-					commandexec="youtube-dl --no-check-certificate "
+					commandexec="youtube-dl -q --no-check-certificate "
 			} || {
 				printf "Util 'youtube-dl' not found!"
 				exit 1

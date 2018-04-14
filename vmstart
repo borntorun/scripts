@@ -18,7 +18,7 @@
 #TODO: allow multiple network adapters and possibility to choose the one to connect
 
 #Change default values:
-defaultuser="joao"
+defaultuser="jmmtcarvalho"
 network="192.168.40" #internal network
 
 
